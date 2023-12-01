@@ -1,0 +1,111 @@
+---
+title: "Сравнение GenolabM и NextSeq"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(writexl)
+library(openxlsx)
+library(stringr)
+library(broom)
+library(knitr)
+```
+
+Загружаем данные GenolabM и NextSeq
+
+```{r message=FALSE}
+GenolabM <- read.table('./GenolabM/MultiQC on data 2070, data 2068, and others_ Stats/general_stats.tabular', header = T)
+NextSeq <- read.table('./NextSeq/MultiQC on data 1895, data 1809, and others_ Stats/general_stats.tabular', header = T)
+```
+
+```{r message=FALSE}
+# Assuming your data frame is named NextSeq
+NextSeq_averaged <- NextSeq %>%
+  mutate(read = str_extract(Sample, "_R\\d_")) %>%
+  group_by(id = str_extract(Sample, "^\\d+"), read) %>%
+  summarize(
+    mean_percent_duplicates = mean(FastQC_mqc.generalstats.fastqc.percent_duplicates),
+    mean_percent_gc = mean(FastQC_mqc.generalstats.fastqc.percent_gc),
+    mean_avg_sequence_length = mean(FastQC_mqc.generalstats.fastqc.avg_sequence_length),
+    mean_percent_fails = mean(FastQC_mqc.generalstats.fastqc.percent_fails),
+    mean_total_sequences = sum(FastQC_mqc.generalstats.fastqc.total_sequences),
+    .groups = 'drop'
+  ) %>%
+  mutate(read = trimws(read, whitespace = "_"))
+```
+
+
+```{r message=FALSE, warning=FALSE}
+GenolabM_averaged <- GenolabM %>%
+  separate(Sample, into = c("id_part", "rest"), sep = "_L00_") %>%
+  separate(rest, into = c("read", "foo"), sep = "_") %>%
+  separate(id_part, into = c("foo1", "foo2", "foo3", "foo4", "foo5", "foo6"), sep = "_") %>%
+  select(-foo, -foo1, -foo2, -foo3, -foo4, -foo5) %>%
+  mutate(id = substr(foo6, 1, 4)) %>% 
+  select(id, everything(), -foo6) %>% 
+  mutate(
+   mean_percent_duplicates = FastQC_mqc.generalstats.fastqc.percent_duplicates,
+   mean_percent_gc = FastQC_mqc.generalstats.fastqc.percent_gc,
+   mean_avg_sequence_length = FastQC_mqc.generalstats.fastqc.avg_sequence_length,
+   mean_percent_fails = FastQC_mqc.generalstats.fastqc.percent_fails,
+   mean_total_sequences = FastQC_mqc.generalstats.fastqc.total_sequences,
+  ) %>% 
+  select(id, read, starts_with("mean_"))
+```
+Проведем t.test ($alpha=0.05$). Тест на нормальность не проводился.
+
+```{r}
+
+# Проводим t-тест и визуализируем результаты
+t_test_results <- lapply(names(GenolabM_averaged)[-c(1, 2)], function(col) {
+  t_test_result <- t.test(GenolabM_averaged[[col]], NextSeq_averaged[[col]])
+  return(data.frame(
+    Variable = col,
+    p.value = t_test_result$p.value,
+    mean_diff = t_test_result$estimate,
+    ci_low = t_test_result$conf.int[1],
+    ci_high = t_test_result$conf.int[2],
+    significance = ifelse(t_test_result$p.value < 0.05, "Significant", "Not Significant")
+  ))
+})
+
+bind_rows(t_test_results) %>% 
+  tibble()
+
+
+```
+
+
+
+```{r}
+library(ggplot2)
+
+# Объединить два фрейма данных и добавить столбец source
+combined_data <- bind_rows(
+  mutate(GenolabM_averaged, source = "GenolabM_averaged"),
+  mutate(NextSeq_averaged, source = "NextSeq_averaged")
+)
+
+# Создать графики для каждого столбца
+plots <- lapply(names(combined_data)[3:ncol(combined_data)], function(col) {
+  ggplot(combined_data, aes(x = id, y = !!sym(col), fill = source)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    labs(title = col, x = "id", y = "Значение") +
+    scale_fill_manual(values = c("GenolabM_averaged" = "blue", "NextSeq_averaged" = "red")) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+})
+
+# Построить каждый график отдельно
+for (i in seq_along(plots)) {
+  print(plots[[i]])
+}
+
+```
+
+
+
