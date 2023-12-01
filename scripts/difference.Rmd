@@ -19,8 +19,8 @@ library(knitr)
 Загружаем данные GenolabM и NextSeq
 
 ```{r message=FALSE}
-GenolabM <- read.table('./GenolabM/MultiQC on data 2070, data 2068, and others_ Stats/general_stats.tabular', header = T)
-NextSeq <- read.table('./NextSeq/MultiQC on data 1895, data 1809, and others_ Stats/general_stats.tabular', header = T)
+GenolabM <- read.table('../GenolabM/MultiQC on data 2070, data 2068, and others_ Stats/general_stats.tabular', header = T)
+NextSeq <- read.table('../NextSeq/MultiQC on data 1895, data 1809, and others_ Stats/general_stats.tabular', header = T)
 ```
 
 ```{r message=FALSE}
@@ -63,7 +63,7 @@ GenolabM_averaged <- GenolabM %>%
 
 # Проводим t-тест и визуализируем результаты
 t_test_results <- lapply(names(GenolabM_averaged)[-c(1, 2)], function(col) {
-  t_test_result <- t.test(GenolabM_averaged[[col]], NextSeq_averaged[[col]])
+  t_test_result <- t.test(GenolabM_averaged[[col]], NextSeq_averaged[[col]], paired=TRUE)
   return(data.frame(
     Variable = col,
     p.value = t_test_result$p.value,
@@ -92,7 +92,7 @@ combined_data <- bind_rows(
 )
 
 # Создать графики для каждого столбца
-plots <- lapply(names(combined_data)[3:ncol(combined_data)], function(col) {
+plots <- lapply(names(combined_data)[3:(ncol(combined_data)-1)], function(col) {
   ggplot(combined_data, aes(x = id, y = !!sym(col), fill = source)) +
     geom_bar(stat = "identity", position = "dodge") +
     labs(title = col, x = "id", y = "Значение") +
