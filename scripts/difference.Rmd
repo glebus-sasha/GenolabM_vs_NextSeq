@@ -5,20 +5,18 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 
 library(tidyverse)
 library(ggplot2)
-library(writexl)
-library(openxlsx)
-library(stringr)
-library(broom)
 library(knitr)
+library(kableExtra)
+
 ```
 
-Загружаем данные GenolabM и NextSeq
 
 ```{r message=FALSE}
+# Загружаем данные GenolabM и NextSeq
 GenolabM <- read.table('../GenolabM/MultiQC on data 2070, data 2068, and others_ Stats/general_stats.tabular', header = T)
 NextSeq <- read.table('../NextSeq/MultiQC on data 1895, data 1809, and others_ Stats/general_stats.tabular', header = T)
 ```
@@ -57,7 +55,7 @@ GenolabM_averaged <- GenolabM %>%
   ) %>% 
   select(id, read, starts_with("mean_"))
 ```
-Проведем t.test ($alpha=0.05$). Тест на нормальность не проводился.
+Тест Стьюдента для связанных выборок ($alpha=0.05$). Тест на нормальность не проводился.
 
 ```{r}
 
@@ -75,14 +73,16 @@ t_test_results <- lapply(names(GenolabM_averaged)[-c(1, 2)], function(col) {
 })
 
 bind_rows(t_test_results) %>% 
-  tibble()
-
+  tibble() %>% 
+  as.data.frame %>% 
+  kable(format = "html") %>%
+  kable_styling("striped", full_width = FALSE)
 
 ```
 
 
 
-```{r}
+```{r fig.width = 10}
 library(ggplot2)
 
 # Объединить два фрейма данных и добавить столбец source
